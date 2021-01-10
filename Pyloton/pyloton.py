@@ -4,8 +4,7 @@
 import requests
 import json
 import os
-import time
-from version import __version__
+from Pyloton.version import __version__
 
 VERBOSE = False
 _BASE_URL = 'https://api.onepeloton.com'
