@@ -1,22 +1,18 @@
 #! /usr/bin/env python3.9
 # -*- coding: latin-1 -*-
 
-import requests
 import json
-import os
-from Pyloton.version import __version__
 
+import requests
+
+_VERSION = '0.1.0'
 VERBOSE = False
 _BASE_URL = 'https://api.onepeloton.com'
-_USER_AGENT = "pyloton/{}".format(__version__)
+_USER_AGENT = "pyloton/{}".format(_VERSION)
 _HEADERS = {
 	"Content-Type": "application/json",
 	"User-Agent":   _USER_AGENT
 }
-_PELOTON_USERNAME = os.environ.get("PELOTON_USERNAME")
-_PELOTON_PASSWORD = os.environ.get("PELOTON_PASSWORD")
-_LOGGED_IN_USER = None
-_SESSION = requests.Session()
 
 
 class _UserObject:
@@ -142,7 +138,7 @@ class _HeartRateZones:
 	def __init__(self, heart_rate_zones_data: dict):
 		"""
 
-        :type heartratezones_data: dict
+        :type heart_rate_zones_data: dict
         """
 		self.list = heart_rate_zones_data
 		self.zone_1 = heart_rate_zones_data[0] if heart_rate_zones_data else None
@@ -151,7 +147,7 @@ class _HeartRateZones:
 		self.zone_4 = heart_rate_zones_data[3] if heart_rate_zones_data else None
 		self.zone_5 = heart_rate_zones_data[4] if heart_rate_zones_data else None
 
-	def toJSON(self) -> dict:
+	def json(self) -> dict:
 		json = {
 			'Zone_1': self.zone_1,
 			'Zone_2': self.zone_2,
@@ -166,7 +162,7 @@ class _UserContractAgreement:
 	def __init__(self, contract_agreement_data: dict):
 		"""
 
-        :type user_data: dict
+        :type contract_agreement_data: dict
         """
 		self.json = contract_agreement_data
 		self.agreed_at = contract_agreement_data['agreed_at']
@@ -399,76 +395,72 @@ def print_json(obj):
 	print(json_str)
 
 
-def log_in_user(username_or_email=None, password=None):
-	payload = None
-	if (username_or_email is None) or (password is None):
-		payload = {'username_or_email': _PELOTON_USERNAME, 'password': _PELOTON_PASSWORD}
-	else:
+class Pyloton:
+	def __init__(self, _peloton_username: str, _peloton_password: str):
+		self._peloton_username: str = _peloton_username
+		# os.environ.get("PELOTON_USERNAME")
+		self._peloton_password: str = _peloton_password
+		# os.environ.get("PELOTON_PASSWORD")
+		self._session = requests.Session()
+		self.logged_in_user = None
+
+	def log_in_user(self, username_or_email, password):
 		payload = {'username_or_email': username_or_email, 'password': password}
-	response = _SESSION.post(_BASE_URL + '/auth/login', json=payload, headers=_HEADERS)
-	_LOGGED_IN_USER = _UserObject(response.json())
+		response = self._session.post(_BASE_URL + '/auth/login', json=payload, headers=_HEADERS)
+		self.logged_in_user = _UserObject(response.json())
+
+	def get_live_classes(self, exclude_complete='true', exclude_live_in_studio_only='true') -> _LiveClassResponse:
+		params = {
+			'exclude_complete':            exclude_complete,
+			'exclude_live_in_studio_only': exclude_live_in_studio_only
+		}
+		response = self._session.get(_BASE_URL + '/api/v3/ride/live', params=params)
+		json_response = response.json()
+
+		if VERBOSE:
+			print_json(json_response)
+
+		return _LiveClassResponse(json_response)
+
+	def get_registered_classes(self) -> ([_LiveClass], _LiveClassResponse):
+		"""
+	    Returns the a list of _LiveClass objects that the signed-in User has registered to attend ("Counted In") and a _LiveClassResponse object that is effectively a Live Classes catalog,
+	    which you can use to get ride and instructor information from for the registered rides without needing to make a second API call.
+
+	    Parameters:
 
 
-def get_resgistered_classes() -> ([_LiveClass], _LiveClassResponse):
-	'''
-    Returns the a list of _LiveClass objects that the signed-in User has registered to attend ("Counted In") and a _LiveClassResponse object that is effectively a Live Classes catalog,
-    which you can use to get ride and instructor information from for the registered rides without needing to make a second API call.
+	    Returns:
+	        registered_classes: A list of classes that the signed-in user has registered for.
+	        live_classes_catalog: Object containing a catalog of information including Instructor and Ride information
+	    """
 
-    Parameters:
+		if self.logged_in_user is None:
+			self.log_in_user(self._peloton_username, self._peloton_password)
 
+		live_classes_catalog = self.get_live_classes()
 
-    Returns:
-        registered_classes: A list of classes that the signed-in user has registered for.
-        live_classes_catelog: Object containing a catalog of information including Instructor and Ride information
-    '''
+		registered_classes = []
+		for live_class in live_classes_catalog.live_classes:
+			if live_class.authed_user_reservation_id:
+				registered_classes.append(live_class)
 
-	if _LOGGED_IN_USER is None:
-		log_in_user()
+		return registered_classes, live_classes_catalog
 
-	live_classes_catalog = get_live_classes()
+	def get_ride(self, ride_id) -> _Ride:
+		class_response = self._session.get(_BASE_URL + '/api/ride/' + ride_id)
+		class_json_response = class_response.json()
+		return _Ride(class_json_response)
 
-	registered_classes = []
-	for live_class in live_classes_catalog.live_classes:
-		if live_class.authed_user_reservation_id:
-			registered_classes.append(live_class)
+	def get_instructor(self, instructor_id) -> _Instructor:
+		instructor_response = self._session.get(_BASE_URL + '/api/instructor/' + instructor_id)
+		instructor_json_response = instructor_response.json()
+		return _Instructor(instructor_json_response)
 
-	return registered_classes, live_classes_catalog
-
-
-def get_ride(ride_id) -> _Ride:
-	class_response = _SESSION.get(_BASE_URL + '/api/ride/' + ride_id)
-	class_json_response = class_response.json()
-	return _Ride(class_json_response)
-
-
-def get_instructor(instructor_id) -> _Instructor:
-	instructor_response = _SESSION.get(_BASE_URL + '/api/instructor/' + instructor_id)
-	instructor_json_response = instructor_response.json()
-	return _Instructor(instructor_json_response)
-
-
-def get_instructors() -> [_Instructor]:
-	instructor_response = _SESSION.get(_BASE_URL + '/api/instructor/')
-	instructor_json_response = instructor_response.json()
-	instructors = []
-	for instructor_data in instructor_json_response["data"]:
-		instructors.append(_Instructor(instructor_data))
-	return instructors
-
-
-def get_live_classes(exclude_complete='true', exclude_live_in_studio_only='true') -> _LiveClassResponse:
-	params = {
-		'exclude_complete':            exclude_complete,
-		'exclude_live_in_studio_only': exclude_live_in_studio_only
-	}
-	response = _SESSION.get(_BASE_URL + '/api/v3/ride/live', params=params)
-	json_response = response.json()
-
-	if VERBOSE:
-		print_json(json_response)
-
-	return _LiveClassResponse(json_response)
-
-
-if __name__ == '__main__':
-	pass
+	def get_instructors(self) -> [_Instructor]:
+		instructor_response = self._session.get(_BASE_URL + '/api/instructor/')
+		instructor_json_response = instructor_response.json()
+		instructors = []
+		for instructor_data in instructor_json_response["data"]:
+			instructors.append(_Instructor(instructor_data))
+		return instructors
