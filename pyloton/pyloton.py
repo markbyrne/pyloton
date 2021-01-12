@@ -397,9 +397,9 @@ def print_json(obj):
 
 class Pyloton:
 	def __init__(self, _peloton_username: str, _peloton_password: str):
-		self._peloton_username: str = _peloton_username
+		self._peloton_username = _peloton_username
 		# os.environ.get("PELOTON_USERNAME")
-		self._peloton_password: str = _peloton_password
+		self._peloton_password = _peloton_password
 		# os.environ.get("PELOTON_PASSWORD")
 		self._session = requests.Session()
 		self.logged_in_user = None
@@ -409,10 +409,11 @@ class Pyloton:
 		response = self._session.post(_BASE_URL + '/auth/login', json=payload, headers=_HEADERS)
 		self.logged_in_user = _UserObject(response.json())
 
-	def get_live_classes(self, exclude_complete='true', exclude_live_in_studio_only='true') -> _LiveClassResponse:
+	def get_live_classes(self, browse_category='cycling', exclude_complete='true', exclude_live_in_studio_only='true') -> _LiveClassResponse:
 		params = {
 			'exclude_complete':            exclude_complete,
-			'exclude_live_in_studio_only': exclude_live_in_studio_only
+			'exclude_live_in_studio_only': exclude_live_in_studio_only,
+			'browse_category': browse_category
 		}
 		response = self._session.get(_BASE_URL + '/api/v3/ride/live', params=params)
 		json_response = response.json()
