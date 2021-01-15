@@ -389,6 +389,36 @@ class _ClassType:
 		self.list_order = class_types_data["list_order"]
 		self.name = class_types_data["name"]
 
+class _Relationships:
+	def __init__(self, relationships_data: dict):
+		self.json = relationships_data
+		self.relationships = []
+		for follower_data in relationships_data['data']:
+			self.relationships.append(_Relationship(follower_data))
+
+class _Followers(_Relationships):
+	def __init__(self, followers_data):
+		super().__init__(followers_data)
+
+class _Following(_Relationships):
+	def __init__(self, following_data):
+		super().__init__(following_data)
+
+class _Relationship:
+	def __init__(self, follower_data: dict):
+		self.json = follower_data
+		self.authed_user_follows = follower_data['authed_user_follows']
+		self.category = follower_data['category']
+		self.id = follower_data['id']
+		self.image_url = follower_data['image_url']
+		self.is_profile_private = follower_data['is_profile_private']
+		self.location = follower_data['location']
+		self.relationship = follower_data['relationship']
+		self.total_followers = follower_data['total_followers']
+		self.total_following = follower_data['total_following']
+		self.total_workouts = follower_data['total_workouts']
+		self.username = follower_data['username']
+
 
 def print_json(obj):
 	json_str = json.dumps(obj, sort_keys=True, indent=4)
@@ -396,11 +426,9 @@ def print_json(obj):
 
 
 class Pyloton:
-	def __init__(self, _peloton_username: str, _peloton_password: str):
+	def __init__(self, _peloton_username: str = None, _peloton_password: str = None):
 		self._peloton_username = _peloton_username
-		# os.environ.get("PELOTON_USERNAME")
 		self._peloton_password = _peloton_password
-		# os.environ.get("PELOTON_PASSWORD")
 		self._session = requests.Session()
 		self.logged_in_user = None
 
@@ -425,7 +453,9 @@ class Pyloton:
 
 	def get_registered_classes(self) -> ([_LiveClass], _LiveClassResponse):
 		"""
-	    Returns the a list of _LiveClass objects that the signed-in User has registered to attend ("Counted In") and a _LiveClassResponse object that is effectively a Live Classes catalog,
+	    (Requires Login) Returns the a list of _LiveClass objects that the signed-in User has registered to attend ("Counted In") and a _LiveClassResponse object that is effectively a Live
+	    Classes
+	    catalog,
 	    which you can use to get ride and instructor information from for the registered rides without needing to make a second API call.
 
 	    Parameters:
@@ -436,8 +466,7 @@ class Pyloton:
 	        live_classes_catalog: Object containing a catalog of information including Instructor and Ride information
 	    """
 
-		if self.logged_in_user is None:
-			self.log_in_user(self._peloton_username, self._peloton_password)
+		self._login_logic()
 
 		live_classes_catalog = self.get_live_classes()
 
@@ -447,6 +476,46 @@ class Pyloton:
 				registered_classes.append(live_class)
 
 		return registered_classes, live_classes_catalog
+
+	def get_user_followers(self, user_id):
+		"""
+		(Requires Login)
+
+		Parameters:
+
+
+		Returns:
+
+		"""
+		self._login_logic()
+		followers_response = self._session.get(_BASE_URL + '/api/user/{}/followers'.format(user_id))
+		followers_json_response = followers_response.json()
+
+		return _Followers(followers_json_response)
+
+	def get_my_followers(self):
+		self._login_logic()
+		return self.get_user_followers(self.logged_in_user.user_id)
+
+	def get_user_following(self, user_id):
+		"""
+		(Requires Login)
+
+		Parameters:
+
+
+		Returns:
+
+		"""
+		self._login_logic()
+		following_response = self._session.get(_BASE_URL + '/api/user/{}/following'.format(user_id))
+		following_json_response = following_response.json()
+
+		return _Following(following_json_response)
+
+	def get_my_following(self):
+		self._login_logic()
+		return self.get_user_following(self.logged_in_user.user_id)
 
 	def get_ride(self, ride_id) -> _Ride:
 		class_response = self._session.get(_BASE_URL + '/api/ride/' + ride_id)
@@ -465,3 +534,9 @@ class Pyloton:
 		for instructor_data in instructor_json_response["data"]:
 			instructors.append(_Instructor(instructor_data))
 		return instructors
+
+	def _login_logic(self):
+		if self._peloton_username is None or self._peloton_password is None:
+			print("Must have a logged in user to use this function. Log in using .log_in_user(), or pass username/password when instantiating Pyloton object.")
+		if self.logged_in_user is None:
+			self.log_in_user(self._peloton_username, self._peloton_password)
